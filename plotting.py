@@ -1,170 +1,140 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_hourly(ax, day_data, selected_date):
-    ax.clear()
+# --- ТЕМНА ТЕМА ---
+THEME = {
+    'bg': '#2d2d2d',
+    'fg': '#ffffff',
+    'grid': '#444444',
+    'line_primary': '#00e5ff',   # Cyan
+    'line_secondary': '#00e676', # Green
+    'line_tertiary': '#ff2a68',  # Red/Pink
+    'scatter': '#ffea00',        # Yellow
+    'fill': '#00e5ff'
+}
+
+def setup_chart_style(ax, title, xlabel, ylabel):
+    """Універсальний стилізатор"""
+    fig = ax.figure
+    fig.patch.set_facecolor(THEME['bg'])
+    ax.set_facecolor(THEME['bg'])
     
+    ax.set_title(title, color=THEME['fg'], pad=10, fontsize=9, fontweight='bold')
+    ax.set_xlabel(xlabel, color=THEME['fg'], fontsize=8)
+    ax.set_ylabel(ylabel, color=THEME['fg'], fontsize=8)
+    
+    ax.tick_params(axis='x', colors=THEME['fg'], labelsize=8)
+    ax.tick_params(axis='y', colors=THEME['fg'], labelsize=8)
+    
+    ax.grid(True, color=THEME['grid'], linestyle='--', alpha=0.5)
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_color(THEME['grid'])
+    ax.spines['left'].set_color(THEME['grid'])
+
+def plot_hourly_dashboard(fig, day_data, selected_date):
+    """Малює ДВА графіки: Часовий ряд та Кореляцію"""
+    ax1 = fig.add_subplot(211) # Верхній графік
+    ax2 = fig.add_subplot(212) # Нижній графік
+    
+    # --- Графік 1: Профіль навантаження ---
     hours = day_data['hour']
     load = day_data['load_mw']
     
-    color = 'tab:blue'
-    ax.set_xlabel('Година')
-    ax.set_ylabel('Навантаження (МВт)', color=color)
-    ax.plot(hours, load, color=color, linewidth=2, label='Навантаження')
-    ax.tick_params(axis='y', labelcolor=color)
-    ax.grid(True, alpha=0.3)
+    ax1.plot(hours, load, color=THEME['line_primary'], linewidth=2, label='Навантаження')
+    ax1.fill_between(hours, load, alpha=0.15, color=THEME['fill'])
     
-    ax.set_title(f'Погодинне навантаження - {selected_date}')
-    ax.set_xlim(0, 23)
-    ax.set_xticks(range(0, 24, 2))
+    setup_chart_style(ax1, f'Профіль: {selected_date}', 'Година', 'МВт')
+    ax1.set_xlim(0, 23)
+    ax1.set_xticks(range(0, 24, 2))
     
-    ax.legend(loc='upper left')
+    # --- Графік 2: Кореляція (Температура vs Навантаження) ---
+    temp = day_data['temperature_c']
+    
+    # Малюємо точки
+    scatter = ax2.scatter(temp, load, color=THEME['scatter'], alpha=0.7, s=40, edgecolors='black', linewidth=0.5)
+    
+    # Лінія тренду (поліноміальна регресія для краси)
+    try:
+        z = np.polyfit(temp, load, 2) # Квадратична залежність
+        p = np.poly1d(z)
+        xp = np.linspace(temp.min(), temp.max(), 100)
+        ax2.plot(xp, p(xp), color=THEME['line_tertiary'], linestyle='--', alpha=0.8, label='Тренд')
+    except: pass
 
-def plot_monthly_monitor(ax, monthly_stats, year):
-    ax.clear()
+    setup_chart_style(ax2, 'Аналіз залежності: Температура vs Навантаження', 'Температура (°C)', 'Навантаження (МВт)')
+    ax2.legend(facecolor=THEME['bg'], edgecolor=THEME['grid'], labelcolor=THEME['fg'], fontsize=8)
+
+    fig.tight_layout(pad=2.0)
+
+def plot_monthly_dashboard(fig, monthly_stats, year):
+    """Малює ДВА графіки: Динаміку та BoxPlot (Розподіл)"""
+    ax1 = fig.add_subplot(211)
+    ax2 = fig.add_subplot(212)
     
     months = [row[1] for row in monthly_stats.index]
-    max_loads = monthly_stats['max_load']
-    min_loads = monthly_stats['min_load']
-    avg_loads = monthly_stats['avg_load']
+    x = np.arange(len(months))
     
-    x_pos = range(len(months))
-    ax.plot(x_pos, max_loads, color='red', linewidth=2, marker='o', label='Макс. навантаження')
-    ax.plot(x_pos, min_loads, color='blue', linewidth=2, marker='o', label='Мін. навантаження')
-    ax.plot(x_pos, avg_loads, color='green', linewidth=2, marker='o', label='Середнє навантаження')
+    # --- Графік 1: Мін/Макс/Середнє ---
+    ax1.plot(x, monthly_stats['max_load'], color=THEME['line_tertiary'], marker='.', label='Макс')
+    ax1.plot(x, monthly_stats['avg_load'], color=THEME['line_secondary'], marker='.', label='Серед')
+    ax1.plot(x, monthly_stats['min_load'], color=THEME['line_primary'], marker='.', label='Мін')
     
-    ax.fill_between(x_pos, min_loads, max_loads, 
-                   alpha=0.2, color='gray', label='Діапазон навантаження')
+    ax1.fill_between(x, monthly_stats['min_load'], monthly_stats['max_load'], alpha=0.1, color='gray')
     
-    ax.set_xlabel('Місяць')
-    ax.set_ylabel('Навантаження (МВт)')
-    ax.set_title(f'Місячний моніторинг навантаження - {year} рік')
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper right')
+    setup_chart_style(ax1, f'Моніторинг ({year})', 'Місяць', 'МВт')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(months, rotation=0, fontsize=8)
+    ax1.legend(facecolor=THEME['bg'], edgecolor=THEME['grid'], labelcolor=THEME['fg'], loc='upper right', fontsize=8)
     
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels(months, rotation=45)
+    # --- Графік 2: Гістограма розподілу (Волатильність) ---
+    # Ми імітуємо BoxPlot використовуючи статистику, яку маємо (мін, макс, середнє)
+    # Для справжнього BoxPlot треба сирі дані, але ми зробимо візуалізацію "Діапазону" (Error Bar Style)
+    
+    ax2.bar(x, monthly_stats['max_load'] - monthly_stats['min_load'], bottom=monthly_stats['min_load'], 
+            color=THEME['fill'], alpha=0.3, edgecolor=THEME['line_primary'], label='Діапазон коливань')
+    
+    # Лінія середнього поверх стовпчиків
+    ax2.plot(x, monthly_stats['avg_load'], color='white', marker='_', markersize=20, linestyle='None', label='Середнє')
+    
+    setup_chart_style(ax2, 'Волатильність (Стабільність навантаження)', 'Місяць', 'Діапазон (МВт)')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(months, rotation=0, fontsize=8)
+    
+    fig.tight_layout(pad=2.0)
 
 def plot_daily_consumption(ax, daily_stats, year, month_name):
     ax.clear()
-    
-    dates = [str(date) for date, _ in daily_stats.index]
-    total_energy = daily_stats['total_energy']
-    
-    ax.plot(dates, total_energy, color='purple', linewidth=2, marker='o', markersize=4, label='Спожита енергія')
-    
-    ax.set_xlabel('Дата')
-    ax.set_ylabel('Спожита енергія (МВт·год)')
-    ax.set_title(f'Добове споживання енергії - {month_name} {year} рік')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    
-    if len(total_energy) > 0:
-        min_energy = total_energy.min()
-        max_energy = total_energy.max()
-        padding = (max_energy - min_energy) * 0.1
-        ax.set_ylim(min_energy - padding, max_energy + padding)
-    
-    ax.tick_params(axis='x', rotation=45)
+    dates = [str(date)[-2:] for date, _ in daily_stats.index]
+    ax.bar(dates, daily_stats['total_energy'], color=THEME['line_primary'], alpha=0.7)
+    setup_chart_style(ax, f'Споживання: {month_name} {year}', 'День', 'МВт·год')
     
     n = len(dates)
     if n > 0:
-        step = max(1, n // 10)
+        step = max(1, n // 15)
         ax.set_xticks(range(0, n, step))
-        ax.set_xticklabels([dates[i] for i in range(0, n, step)], rotation=45)
+        ax.set_xticklabels([dates[i] for i in range(0, n, step)])
 
-def plot_daily_load(ax, daily_stats, year, month_name):
+def plot_monthly_consumption(ax, stats):
     ax.clear()
-    
-    dates = [str(date) for date, _ in daily_stats.index]
-    avg_load = daily_stats['avg_load']
-    max_load = daily_stats['max_load']
-    
-    ax.plot(dates, avg_load, color='green', linewidth=2, marker='o', markersize=4, label='Середнє навантаження')
-    ax.plot(dates, max_load, color='red', linewidth=2, marker='s', markersize=4, label='Максимальне навантаження')
-    
-    ax.set_xlabel('Дата')
-    ax.set_ylabel('Навантаження (МВт)')
-    ax.set_title(f'Добове навантаження - {month_name} {year} рік')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    
-    ax.tick_params(axis='x', rotation=45)
-    
-    n = len(dates)
-    if n > 0:
-        step = max(1, n // 10)
-        ax.set_xticks(range(0, n, step))
-        ax.set_xticklabels([dates[i] for i in range(0, n, step)], rotation=45)
-
-def plot_monthly_consumption(ax, monthly_consumption):
-    ax.clear()
-    
-    years = sorted(monthly_consumption.index.get_level_values('year').unique())
-    
-    months_ukrainian = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень',
-                       'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень']
-    
-    x_pos = np.arange(len(months_ukrainian))
+    years = stats.index.get_level_values('year').unique()
+    months_ukr = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру']
+    x = np.arange(len(months_ukr))
     
     for i, year in enumerate(years):
-        year_data = monthly_consumption.xs(year, level='year')
-        
-        monthly_energy = []
-        for month_idx in range(1, 13):
-            month_data = year_data[year_data.index.get_level_values('month') == month_idx]
-            if not month_data.empty:
-                monthly_energy.append(month_data['total_energy'].iloc[0])
-            else:
-                monthly_energy.append(0)
-        
-        ax.plot(x_pos, monthly_energy, color=f'C{i}', linewidth=2, marker='o', 
-                label=f'{year} - Спожита енергія')
-    
-    ax.set_xlabel('Місяць')
-    ax.set_ylabel('Спожита енергія (МВт·год)')
-    ax.set_title('Місячне споживання енергії')
-    ax.legend(title='Рік')
-    ax.grid(True, alpha=0.3)
-    
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels(months_ukrainian, rotation=45)
+        try:
+            year_data = stats.xs(year, level='year')
+            values = []
+            for m_idx in range(1, 13):
+                val = 0
+                rows = year_data[year_data.index.get_level_values('month') == m_idx]
+                if not rows.empty: val = rows['total_energy'].iloc[0]
+                values.append(val)
+            ax.plot(x, values, marker='o', linewidth=2, label=str(year))
+        except: pass
 
-def plot_monthly_load(ax, monthly_consumption):
-    ax.clear()
-    
-    years = sorted(monthly_consumption.index.get_level_values('year').unique())
-    
-    months_ukrainian = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень',
-                       'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень']
-    
-    x_pos = np.arange(len(months_ukrainian))
-    
-    for i, year in enumerate(years):
-        year_data = monthly_consumption.xs(year, level='year')
-        
-        monthly_avg_load = []
-        monthly_max_load = []
-        
-        for month_idx in range(1, 13):
-            month_data = year_data[year_data.index.get_level_values('month') == month_idx]
-            if not month_data.empty:
-                monthly_avg_load.append(month_data['avg_load'].iloc[0])
-                monthly_max_load.append(month_data['max_load'].iloc[0])
-            else:
-                monthly_avg_load.append(0)
-                monthly_max_load.append(0)
-        
-        ax.plot(x_pos, monthly_avg_load, color=f'C{i}', linewidth=2, marker='o', 
-                label=f'{year} - Середнє навантаження')
-        ax.plot(x_pos, monthly_max_load, color=f'C{i}', linewidth=2, marker='s', 
-                linestyle='--', label=f'{year} - Макс. навантаження')
-    
-    ax.set_xlabel('Місяць')
-    ax.set_ylabel('Навантаження (МВт)')
-    ax.set_title('Місячне навантаження')
-    ax.legend(title='Показники за роками', loc='upper left', bbox_to_anchor=(1, 1))
-    ax.grid(True, alpha=0.3)
-    
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels(months_ukrainian, rotation=45)
+    setup_chart_style(ax, 'Річна динаміка', 'Місяць', 'МВт·год')
+    ax.set_xticks(x)
+    ax.set_xticklabels(months_ukr)
+    ax.legend(facecolor=THEME['bg'], edgecolor=THEME['grid'], labelcolor=THEME['fg'])
